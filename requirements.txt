@@ -1,0 +1,2 @@
+# For generate_certs.py only (optional local use)
+cryptography>=42.0.0

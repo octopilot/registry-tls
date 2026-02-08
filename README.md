@@ -20,6 +20,8 @@ docker run -p 5001:5001 registry-tls
 docker run -p 5001:5001 ghcr.io/octopilot/registry-tls:latest
 ```
 
+The image is a multi-arch manifest: **linux/amd64**, **linux/arm64** (Apple Silicon), and **linux/arm/v7**. Use `:latest-amd64`, `:latest-arm64`, or `:latest-armv7` for a specific arch. The armv7 variant uses nginx for TLS (Envoy does not publish an armv7 image).
+
 Clients will see a self-signed cert warning unless you add `"insecure-registries": ["localhost:5001"]` in Docker settings (or trust the cert).
 
 ## Persistence

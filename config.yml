@@ -1,0 +1,8 @@
+# Minimal registry config for single-container image.
+# Storage is in-container; mount a volume at /var/lib/registry for persistence.
+version: 0.1
+storage:
+  filesystem:
+    rootdirectory: /var/lib/registry
+http:
+  addr: :5000
