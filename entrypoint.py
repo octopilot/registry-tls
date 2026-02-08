@@ -14,6 +14,8 @@ from pathlib import Path
 
 # Cert output dir (must match envoy-container.yaml)
 CERT_DIR = Path("/etc/envoy/certs")
+# Bump when SAN list changes so existing volumes regenerate certs (e.g. add host.docker.internal)
+CERT_SAN_VERSION = "2"
 REGISTRY_BIN = "/bin/registry"
 REGISTRY_CONFIG = "/etc/docker/registry/config.yml"
 ENVOY_BIN = "/usr/local/bin/envoy"
@@ -36,8 +38,12 @@ def generate_certs() -> None:
     CERT_DIR.mkdir(parents=True, exist_ok=True)
     key_path = CERT_DIR / "tls.key"
     crt_path = CERT_DIR / "tls.crt"
+    version_path = CERT_DIR / "san_version"
     if key_path.exists() and crt_path.exists():
-        return
+        if version_path.exists() and version_path.read_text().strip() == CERT_SAN_VERSION:
+            return
+        key_path.unlink(missing_ok=True)
+        crt_path.unlink(missing_ok=True)
 
     key = rsa.generate_private_key(
         public_exponent=65537, key_size=2048, backend=default_backend()
@@ -47,6 +53,18 @@ def generate_certs() -> None:
         x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
     ])
     import ipaddress
+    # SANs for local registry access (hostnames and IPs clients may use to reach this service):
+    # - localhost, 127.0.0.1, ::1: same machine (e.g. browser, curl, docker pull from host)
+    # - host.docker.internal: Mac/Windows Docker/Colima; containers reaching host registry
+    # - registry.local, registry: optional local DNS names
+    sans = [
+        x509.DNSName("localhost"),
+        x509.DNSName("registry.local"),
+        x509.DNSName("registry"),
+        x509.DNSName("host.docker.internal"),
+        x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+        x509.IPAddress(ipaddress.ip_address("::1")),
+    ]
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -56,11 +74,7 @@ def generate_certs() -> None:
         .not_valid_before(datetime.utcnow())
         .not_valid_after(datetime.utcnow() + timedelta(days=3650))
         .add_extension(
-            x509.SubjectAlternativeName([
-                x509.DNSName("localhost"),
-                x509.DNSName("registry.local"),
-                x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
-            ]),
+            x509.SubjectAlternativeName(sans),
             critical=False,
         )
         .sign(key, hashes.SHA256(), default_backend())
@@ -73,6 +87,7 @@ def generate_certs() -> None:
         )
     )
     crt_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    version_path.write_text(CERT_SAN_VERSION + "\n")
 
 
 def main() -> None:

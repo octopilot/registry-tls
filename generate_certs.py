@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-Generate a self-signed TLS certificate for the registry proxy (localhost, registry.local).
+Generate a self-signed TLS certificate for the registry proxy.
+Includes local SANs: localhost, registry.local, registry, host.docker.internal, 127.0.0.1, ::1.
 Writes tls.crt and tls.key into the local certs/ directory.
 Requires: pip install cryptography
 """
 from __future__ import annotations
 
+import ipaddress
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -19,6 +21,16 @@ try:
 except ImportError:
     print("Install the cryptography package: pip install cryptography", file=sys.stderr)
     sys.exit(1)
+
+# Same SANs as entrypoint.py for local registry access
+LOCAL_SANS = [
+    x509.DNSName("localhost"),
+    x509.DNSName("registry.local"),
+    x509.DNSName("registry"),
+    x509.DNSName("host.docker.internal"),
+    x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+    x509.IPAddress(ipaddress.ip_address("::1")),
+]
 
 
 def main() -> None:
@@ -43,11 +55,7 @@ def main() -> None:
         .not_valid_before(datetime.utcnow())
         .not_valid_after(datetime.utcnow() + timedelta(days=3650))  # 10 years
         .add_extension(
-            x509.SubjectAlternativeName([
-                x509.DNSName("localhost"),
-                x509.DNSName("registry.local"),
-                x509.IPAddress(__import__("ipaddress").ip_address("127.0.0.1")),
-            ]),
+            x509.SubjectAlternativeName(LOCAL_SANS),
             critical=False,
         )
         .sign(key, hashes.SHA256(), default_backend())
