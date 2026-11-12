@@ -29,4 +29,8 @@ RUN chmod +x /entrypoint.py && mkdir -p /etc/envoy/certs
 # TLS on 5001; registry listens on 5000 inside container
 EXPOSE 5001
 
+# So GitHub Actions (and docker inspect) can wait for "ready" by health status
+HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=3 \
+  CMD python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/v2/', timeout=2)" || exit 1
+
 ENTRYPOINT ["python3", "/entrypoint.py"]
